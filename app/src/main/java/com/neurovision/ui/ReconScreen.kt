@@ -197,8 +197,6 @@ fun ReconScreen(scanLog: ScanLog) {
 
             NeuroScreen.WORLD -> WorldOverlay(
                 metrics = metrics,
-                points = worldPoints,
-                onTogglePoints = { worldPoints = !worldPoints },
                 onResetView = { surfaceView.resetOrbit() },
                 modifier = Modifier
                     .fillMaxSize()

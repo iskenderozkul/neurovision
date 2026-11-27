@@ -390,8 +390,6 @@ fun MotionTracksOverlay(
 /** Free-orbit controls for the 3D world screen, drawn over the GL surface. */@Composable
 fun WorldOverlay(
     metrics: ReconMetrics,
-    points: Boolean,
-    onTogglePoints: () -> Unit,
     onResetView: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -417,7 +415,6 @@ fun WorldOverlay(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Chip(if (points) "Nokta" else "Mesh", CyanAccent, onTogglePoints)
                 Chip("Sıfırla", TextSecondary, onResetView)
             }
         }
