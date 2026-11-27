@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.NeuroVision" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#FF121212</item>
+        <item name="android:navigationBarColor">#FF121212</item>
+    </style>
+</resources>
