@@ -29,23 +29,17 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.neurovision.ar.ReconSurfaceView
 import com.neurovision.recon.NeuroScreen
-import com.neurovision.recon.ReconAnchor
 import com.neurovision.recon.ReconMetrics
 import com.neurovision.recon.RenderMode
 import com.neurovision.recon.ScanLog
-import com.neurovision.ui.components.AnchorListSheet
 import com.neurovision.ui.components.DepthPanel
 import com.neurovision.ui.components.DiagnosticsPanel
 import com.neurovision.ui.components.EventPanel
 import com.neurovision.ui.components.ExportMeshSheet
-import com.neurovision.ui.components.LivePerceptionBar
-import com.neurovision.ui.components.MotionTracksOverlay
 import com.neurovision.ui.components.ReconControlBar
-import com.neurovision.ui.components.ReconHud
 import com.neurovision.ui.components.WorldOverlay
 import com.neurovision.ui.theme.DarkSurface
 import com.neurovision.ui.theme.RoseError
-import com.neurovision.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -70,23 +64,12 @@ fun ReconScreen(scanLog: ScanLog) {
     val surfaceView = remember(context) { ReconSurfaceView(context) }
 
     var metrics by remember { mutableStateOf(ReconMetrics(scanning = true)) }
-    var anchors by remember { mutableStateOf<List<ReconAnchor>>(emptyList()) }
     var screen by remember { mutableStateOf(NeuroScreen.LIVE) }
     var worldPoints by remember { mutableStateOf(false) }
     var eventThreshold by remember { mutableFloatStateOf(0.20f) }
     var eventDecay by remember { mutableFloatStateOf(0.86f) }
     var showExportSheet by remember { mutableStateOf(false) }
-    var showAnchorSheet by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var notice by remember { mutableStateOf<String?>(null) }
-
-    // Anchor failures are transient guidance, unlike the persistent error card.
-    LaunchedEffect(notice) {
-        if (notice != null) {
-            delay(4000)
-            notice = null
-        }
-    }
 
     // The 3D screen swaps the AR camera for a free orbit camera. ARCore keeps
     // tracking and the reconstruction worker keeps integrating while it is open.
@@ -96,7 +79,6 @@ fun ReconScreen(scanLog: ScanLog) {
     }
 
     val exportSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val anchorSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     DisposableEffect(lifecycleOwner, surfaceView) {
         val observer = LifecycleEventObserver { _, event ->
@@ -113,12 +95,13 @@ fun ReconScreen(scanLog: ScanLog) {
         }
     }
 
+    // Less frequent, lighter snapshots: UI noise is not worth stutter. Every
+    // number that used to clutter the screen is written to the session log.
     LaunchedEffect(surfaceView) {
         var lastFrameCount = -1
         var lastProgressAt = System.currentTimeMillis()
         while (true) {
             metrics = surfaceView.snapshotMetrics()
-            anchors = surfaceView.anchors()
             scanLog.log(
                 "t fps=${f1(metrics.fps)} ms=${f1(metrics.processMs)} " +
                     "kf=${metrics.keyframes} tris=${metrics.triangles} " +
@@ -135,9 +118,6 @@ fun ReconScreen(scanLog: ScanLog) {
                     "feat=${metrics.neuro.featureCount} " +
                     "motion_ms=${f1(metrics.neuro.motionProcessMs)}"
             )
-            // A frozen worker used to look like a crash: frames stop advancing
-            // while the UI keeps running. Name the stage explicitly so the
-            // session log shows where the native side is stuck.
             if (metrics.framesProcessed != lastFrameCount) {
                 lastFrameCount = metrics.framesProcessed
                 lastProgressAt = System.currentTimeMillis()
@@ -150,7 +130,7 @@ fun ReconScreen(scanLog: ScanLog) {
                 lastProgressAt = System.currentTimeMillis()
             }
             scanLog.logBlock(surfaceView.drainDiagnostics())
-            delay(500)
+            delay(1000)
         }
     }
 
@@ -162,27 +142,12 @@ fun ReconScreen(scanLog: ScanLog) {
                         errorMessage = message
                         scanLog.log("error=$message")
                     }
-                    onAnchorFailure = { message ->
-                        notice = message
-                        scanLog.log("anchor_failed=$message")
-                    }
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        // Measured sparse-flow vectors over the live camera. Only on LIVE, and
-        // only when ARCore has produced the image->screen transform.
-        if (screen == NeuroScreen.LIVE) {
-            MotionTracksOverlay(
-                tracks = metrics.neuro.motionTracks,
-                toNdc = metrics.neuro.trackToNdc,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        // Orbit gesture layer. It only exists on the 3D screen and sits below
-        // the overlay chips and the control bar, so those still receive taps.
+        // Orbit gesture layer. Only on the 3D screen, below overlays/controls.
         if (screen == NeuroScreen.WORLD) {
             Box(
                 modifier = Modifier
@@ -243,26 +208,6 @@ fun ReconScreen(scanLog: ScanLog) {
             NeuroScreen.LIVE -> Unit
         }
 
-        if (screen == NeuroScreen.LIVE) {
-            ReconHud(
-                metrics = metrics,
-                anchorCount = anchors.size,
-                recording = metrics.scanning,
-                onShareLog = {
-                    val current = scanLog.currentFile()
-                    if (current != null) ScanLog.shareSessionLog(context, current)
-                },
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
-
-            LivePerceptionBar(
-                metrics = metrics,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 126.dp)
-            )
-        }
-
         errorMessage?.let { message ->
             Surface(
                 modifier = Modifier
@@ -280,23 +225,6 @@ fun ReconScreen(scanLog: ScanLog) {
             }
         }
 
-        notice?.let { message ->
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 88.dp, start = 24.dp, end = 24.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = DarkSurface.copy(alpha = 0.92f)
-            ) {
-                Text(
-                    text = message,
-                    color = TextSecondary,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                )
-            }
-        }
-
         ReconControlBar(
             isScanning = metrics.scanning,
             screen = screen,
@@ -306,8 +234,6 @@ fun ReconScreen(scanLog: ScanLog) {
                 surfaceView.setScanning(next)
                 metrics = metrics.copy(scanning = next)
             },
-            onAddAnchor = { surfaceView.addAnchor() },
-            onOpenAnchors = { showAnchorSheet = true },
             onOpenExport = { showExportSheet = true },
             onResetScan = { surfaceView.resetReconstruction() },
             modifier = Modifier.align(Alignment.BottomCenter)
@@ -320,18 +246,6 @@ fun ReconScreen(scanLog: ScanLog) {
                 vertexCount = metrics.vertices,
                 onDismiss = { showExportSheet = false },
                 onExport = { format -> surfaceView.exportMesh(format) }
-            )
-        }
-
-        if (showAnchorSheet) {
-            AnchorListSheet(
-                sheetState = anchorSheetState,
-                anchors = anchors,
-                onDismiss = { showAnchorSheet = false },
-                onRemoveAnchor = { id ->
-                    surfaceView.removeAnchor(id)
-                    anchors = anchors.filterNot { it.id == id }
-                }
             )
         }
     }

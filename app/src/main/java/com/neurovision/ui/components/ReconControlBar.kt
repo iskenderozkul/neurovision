@@ -13,11 +13,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,7 +31,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.neurovision.recon.NeuroScreen
-import com.neurovision.ui.theme.AmberAccent
 import com.neurovision.ui.theme.CyanAccent
 import com.neurovision.ui.theme.DarkSurface
 import com.neurovision.ui.theme.DarkSurfaceElevated
@@ -42,9 +39,10 @@ import com.neurovision.ui.theme.RoseError
 import com.neurovision.ui.theme.TextSecondary
 
 /**
- * Bottom bar: the five screen tabs on top and the scan controls below. The
- * tabs replace the old render-mode chips, because the modes are now whole
- * screens (live AR, event map, depth map, free-orbit 3D world, diagnostics).
+ * Bottom bar: screen tabs on top, then reset / scan-pause / export. Manual
+ * anchor placement and anchor-removal were removed: event anchors are produced
+ * automatically from measured event + depth; diagnostics are written to the
+ * session log, not cluttered on screen. No numeric clutter here.
  */
 @Composable
 fun ReconControlBar(
@@ -52,8 +50,6 @@ fun ReconControlBar(
     screen: NeuroScreen,
     onSelectScreen: (NeuroScreen) -> Unit,
     onToggleScan: () -> Unit,
-    onAddAnchor: () -> Unit,
-    onOpenAnchors: () -> Unit,
     onOpenExport: () -> Unit,
     onResetScan: () -> Unit,
     modifier: Modifier = Modifier
@@ -105,7 +101,7 @@ fun ReconControlBar(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 ActionButton(
@@ -114,14 +110,6 @@ fun ReconControlBar(
                     tint = RoseError,
                     onClick = onResetScan,
                     tag = "reset_scan_button"
-                )
-
-                ActionButton(
-                    icon = Icons.Default.BookmarkAdd,
-                    label = "Anchor",
-                    tint = AmberAccent,
-                    onClick = onAddAnchor,
-                    tag = "add_anchor_button"
                 )
 
                 Box(
@@ -140,14 +128,6 @@ fun ReconControlBar(
                         modifier = Modifier.size(30.dp)
                     )
                 }
-
-                ActionButton(
-                    icon = Icons.Default.Place,
-                    label = "Anchor'lar",
-                    tint = AmberAccent,
-                    onClick = onOpenAnchors,
-                    tag = "open_anchors_button"
-                )
 
                 ActionButton(
                     icon = Icons.Default.FileDownload,

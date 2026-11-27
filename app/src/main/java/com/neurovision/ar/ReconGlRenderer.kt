@@ -287,7 +287,7 @@ class ReconGlRenderer : GLSurfaceView.Renderer {
                 NativeRecon.render(
                     handle, 0, viewMatrix, projectionMatrix, backgroundUv,
                     viewportWidth, viewportHeight,
-                    if (worldPoints) 4 else 5, FloatArray(0)
+                    6, FloatArray(0)  // mode 6 = measured event cloud (points + anchor)
                 )
             }
             return

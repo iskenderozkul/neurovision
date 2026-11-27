@@ -64,7 +64,10 @@ recon::Mat4 perspective(float fovyRad, float aspect, float nearZ, float farZ) {
 }
 
 void updateBounds(NativeContext* c) {
-    const auto mesh = c->engine->mesh();
+    auto mesh = c->engine->mesh();
+    // If the heavy mesh has no geometry yet, orbit the measured event cloud
+    // instead; event cloud is what the 3D world renders first.
+    if (!mesh || mesh->vertices.empty()) mesh = c->engine->eventCloudMesh();
     if (!mesh || mesh->vertices.empty()) {
         c->hasBounds = false;
         return;
@@ -309,9 +312,18 @@ jboolean nativeRender(JNIEnv* env, jobject, jlong handle, jint cameraTexture,
     }
 
     if (view && proj && bgUv) {
-        c->renderer.render(view, proj, cameraTexture, bgUv, width, height, mode,
-                           anchors, anchorCount, c->engine->mesh(),
-                           c->engine->dynamicMesh());
+        // mode 6 = measured event cloud (point cloud, no triangles). Rendered
+        // as GL_POINTS using mode 4; dynamic moving mesh is suppressed.
+        int renderMode = mode;
+        std::shared_ptr<const recon::MeshData> mesh = c->engine->mesh();
+        std::shared_ptr<const recon::MeshData> dynamic = c->engine->dynamicMesh();
+        if (mode == 6) {
+            mesh = c->engine->eventCloudMesh();
+            dynamic = nullptr;
+            renderMode = 4;
+        }
+        c->renderer.render(view, proj, cameraTexture, bgUv, width, height, renderMode,
+                           anchors, anchorCount, mesh, dynamic);
     }
 
     if (anchors) env->ReleaseFloatArrayElements(anchorArr, anchors, JNI_ABORT);

@@ -292,6 +292,14 @@ void Engine::performReset(bool freshProfile) {
     keyframes_.clear();
     hash_.clear();
     mesher_.reset();
+    events_.reset();
+    motion_.reset();
+    perceptionFrame_ = 0;
+    {
+        std::lock_guard<std::mutex> lock(eventCloudMutex_);
+        eventCloudSnapshot_ = std::make_shared<MeshData>();
+        eventCloudSnapshot_->version = ++eventCloudVersion_;
+    }
     // A reset is also how the user moves between a room and the street; the
     // scene vote only chooses how sparse samples are cleaned and how far depth
     // is accepted. The volumetric profile survives an automatic relocalisation
@@ -447,10 +455,21 @@ bool Engine::processFrame(const FrameInput& frame) {
     // events are an observation channel, not a second source of geometry.
     events_.process(frame.y.data(), frame.width, frame.height, frame.width,
                     frame.timestampNs);
-    motion_.process(frame.y.data(), frame.width, frame.height, frame.width,
-                    frame.timestampNs);
+    // Sparse LK is the expensive perception stage on phones; run it every 3rd
+    // frame so it does not steal worker time from reconstruction. The event
+    // engine stays every frame; neither claims data above camera FPS.
+    if ((perceptionFrame_ % 3) == 0) {
+        motion_.process(frame.y.data(), frame.width, frame.height, frame.width,
+                        frame.timestampNs);
+    }
+    ++perceptionFrame_;
 
     if (!frame.tracking) return false;
+
+    // Lightweight measured event cloud (event-active + valid measured depth).
+    // Built independently of the heavy TSDF so it appears quickly with anchor
+    // rendering; it is additive, not a replacement for the metric mesh.
+    buildEventCloud(frame);
 
     const Vec3 position{frame.tx, frame.ty, frame.tz};
     lastCamera_ = position;
@@ -2214,6 +2233,84 @@ void Engine::buildDynamicMesh(const FrameInput& frame, const DepthResult& depth,
 std::shared_ptr<const MeshData> Engine::dynamicMesh() const {
     std::lock_guard<std::mutex> lock(dynamicMutex_);
     return dynamicSnapshot_;
+}
+
+std::shared_ptr<const MeshData> Engine::eventCloudMesh() const {
+    std::lock_guard<std::mutex> lock(eventCloudMutex_);
+    return eventCloudSnapshot_;
+}
+
+// Measured event cloud: event-active pixels whose raw measured depth is valid,
+// unprojected into ARCore world space. No surface is invented; pixels with no
+// measured depth are skipped. Event->depth alignment is approximate (event grid
+// 320x240 vs depth grid, depthTransform applied when present); it is a lightweight
+// visual anchor, not a replacement for the metric TSDF. Capped for speed.
+void Engine::buildEventCloud(const FrameInput& frame) {
+    auto snap = std::make_shared<MeshData>();
+    const int kEvW = nv::EventEngine::kWidth;
+    const int kEvH = nv::EventEngine::kHeight;
+    constexpr size_t kMaxPoints = 4096;
+
+    if (frame.hasDepth() && frame.Kdepth.fx > 1.f && frame.Kdepth.fy > 1.f) {
+        const int dw = frame.depthWidth;
+        const int dh = frame.depthHeight;
+        const float* m = frame.depthTransform;
+        const float kcx = frame.Kdepth.cx, kcy = frame.Kdepth.cy;
+        const float kfx = frame.Kdepth.fx, kfy = frame.Kdepth.fy;
+
+        std::vector<uint8_t> density(static_cast<size_t>(kEvW) * kEvH, 0);
+        std::vector<uint32_t> argb(static_cast<size_t>(kEvW) * kEvH, 0);
+        events_.densityGrid(density.data());
+        events_.preview(argb.data());
+
+        const Mat3 R = matFromQuat(frame.qx, frame.qy, frame.qz, frame.qw);
+        const Vec3 t{frame.tx, frame.ty, frame.tz};
+
+        snap->vertices.reserve(kMaxPoints);
+        for (int ey = 0; ey < kEvH && snap->vertices.size() < kMaxPoints; ++ey) {
+            for (int ex = 0; ex < kEvW && snap->vertices.size() < kMaxPoints; ++ex) {
+                const size_t idx = static_cast<size_t>(ey) * kEvW + ex;
+                if (density[idx] == 0) continue;
+
+                const float nx = (ex + 0.5f) / kEvW;
+                const float ny = (ey + 0.5f) / kEvH;
+                const float u = m[0] * nx + m[1] * ny + m[2];
+                const float v = m[3] * nx + m[4] * ny + m[5];
+                if (u < 0.f || u > 1.f || v < 0.f || v > 1.f) continue;
+
+                const int dx = clampf(u * dw, 0.f, static_cast<float>(dw - 1));
+                const int dy = clampf(v * dh, 0.f, static_cast<float>(dh - 1));
+                if (frame.hasConfidence() &&
+                    frame.confidence[static_cast<size_t>(dy) * dw + dx] < 128) continue;
+
+                const uint16_t mm = frame.depthMm[static_cast<size_t>(dy) * dw + dx];
+                if (mm == 0) continue;
+                const float z = mm / 1000.f;
+                if (z < 0.05f || z > 6.0f) continue;  // reconstruction range, measured only
+
+                const float X = (dx + 0.5f - kcx) / kfx * z;
+                const float Y = (dy + 0.5f - kcy) / kfy * z;
+                const Vec3 gl{X, -Y, -z};  // CV (Y down, Z fwd) -> ARCore (Y up, -Z fwd)
+                const Vec3 world = R * gl + t;
+
+                const uint32_t c = argb[idx];
+                MeshVertex vtx{};
+                vtx.px = world.x; vtx.py = world.y; vtx.pz = world.z;
+                vtx.nx = 0.f; vtx.ny = 1.f; vtx.nz = 0.f;
+                vtx.r = static_cast<uint8_t>((c >> 16) & 0xFF);
+                vtx.g = static_cast<uint8_t>((c >> 8) & 0xFF);
+                vtx.b = static_cast<uint8_t>(c & 0xFF);
+                vtx.a = 255;
+                snap->vertices.push_back(vtx);
+            }
+        }
+    }
+    snap->version = ++eventCloudVersion_;
+    snap->triangleCount = 0;
+    {
+        std::lock_guard<std::mutex> lock(eventCloudMutex_);
+        eventCloudSnapshot_ = snap;
+    }
 }
 
 void Engine::queueDirty(const std::vector<VoxelBlock*>& blocks) {

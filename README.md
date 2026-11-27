@@ -26,12 +26,12 @@ Amaç: canlı kamera görüntüsünü, **sahte veri eklemeden**, ölçülebilir 
 
 ### Uygulama içeriği
 
-- **Canlı kamera (Live):** ARCore `Session`, 6DoF metrik poz, kamera iç parametreleri, YUV_420_888 kare; sağlıklı görüntü; takip kaybı dürüstçe gösterilir; **hareket vektörleri** (Lucas-Kanade) + yön göstergesi; event özeti.
+- **Canlı kamera (Live):** ARCore `Session`, 6DoF metrik poz, kamera iç parametreleri, YUV_420_888 kare; sağlıklı görüntü; takip kaybı dürüstçe gösterilir. **Sayısal ayrıntı kaldırıldı; ölçümler oturum loguna yazılır.**
 - **Event View (Yazılımsal DVS):** kamera **luma**'sından 320×240 grid; log-parlaklık `L=log(1+I)`; piksel başına per-reference eşik `C`; **+/-** polarity; eşik/sönüm (decay) kontrolü; event rate (ev/s), yoğunluk, ortalama `|ΔL|`, pozitif/negatif sayı; event maske preview. **Fiziksel event kamerası iddiası yok; kamera FPS'inin üstünde yeni bilgi üretme iddiası yok.**
 - **Motion / Hareket:** 4 seviyeli piramit **Lucas-Kanade**, grid tabanlı **Shi-Tomasi/Harris** köşe tespiti (`kMaxFeatures=96`), takip oranı, **medyan dx/dy**, `px/s` hız, baskın yön (sağ/sol/yukarı/aşağı), scene-change; **görüntü-uzayı piksel akışı metrik kamera hareketi DEĞİLDİR**; metrik 6DoF ayrıca ARCore pozundan alınır.
 - **Depth View:** **ARCore Depth API** (raw + confidence + smoothed) öncelikli; destek yoksa **cihaz içi MVS** (SGM + census) fallback; renkli heatmap, güven haritası, geçerli piksel oranı, kaynak (`ARCore Depth` / `MVS Depth` / no depth), gecikme. **Görülmeyen yüzeyler uydurulmaz.**
 - **Visual-Inertial SLAM:** ARCore + IMU; takip durumu, relokalizasyon, pose sürekliliği metrik 6DoF. 
-- **3D World:** **Tango 3D Reconstruction** TSDF + Marching Cubes renkli mesh; nokta bulutu ↔ mesh; serbest yörünge; fallback **TSDF + MVS**. 
+- **3D World:** **Tango 3D Reconstruction** TSDF + Marching Cubes renkli mesh; **ölçülen event cloud** (event-aktif + geçerli ölçülen derinlik, dünya-uzayı nokta bulutu; görüntü gerekmez; event→depth hizalaması yaklaşık; uydurulmuş yüzey yok); nokta bulutu ↔ mesh; serbest yörünge; fallback **TSDF + MVS**. **Manuel anchor / anchor-kaldırma düğmesi kaldırıldı; event anchor otomatik.** 
 - **Export:** OBJ / PLY, ASCII PLY; renkli köşe/normaller; session log; OBJ/PLY dosyası; oturum içi harita; uzun süreli kalıcı harita + yeniden açma henüz kararlı değil.
 - **Diagnostics:** ölçülen FPS, kare süresi, worker `processMs`, event `ev_ms`, `motion_ms`, derinlik kaynağı, geçerli derinlik %, triangle/vertex/keyframe/block, SLAM durumu, relokalizasyon, bellek; session log; native perception self-test; mesh self-test. **Sayılar canlı ölçüm; uydurulmaz.**
 - **İstenmeyen/uygulanmayan iddialar:** fiziksel event camera; kamera FPS'ini aşan event; mutlak ölçek garantisi; MVS'te garantili metrik doğruluk; **eğitilmemiş TFLite modeli varmış gibi semantik etiket**; nesne tespiti/model yoksa "model yok"; **Gaussian Splatting** bu sürümde yok; dinamik insan/araç 3D yeniden kurulması yok; ARCore'un döndürmediği yüzeyler tamamlanmış gibi gösterilmez.
@@ -55,7 +55,7 @@ Goal: convert live camera input, **without injecting synthetic data**, into a me
 - **Motion:** 4-level pyramidal **Lucas-Kanade**, grid-based **Shi-Tomasi/Harris** corners (`kMaxFeatures=96`), tracking share, **median dx/dy**, `px/s`, dominant direction; **image-space pixel flow is not metric camera motion**; metric 6DoF comes separately from ARCore pose.
 - **Depth View:** **ARCore Depth API** first; **on-device MVS** fallback; heatmap, confidence, valid-pixel share, source, latency. **Unobserved surfaces are not invented.**
 - **Visual-Inertial SLAM:** ARCore + IMU; tracking, relocalisation, pose continuity; metric 6DoF.
-- **3D World:** Tango 3D Reconstruction **TSDF + Marching Cubes** coloured mesh; point cloud ↔ mesh; free orbit; **TSDF + MVS** fallback.
+- **3D World:** Tango 3D Reconstruction **TSDF + Marching Cubes** coloured mesh; **measured event cloud** (event-active + valid measured depth, world-space points; no image required; approximate event→depth alignment; no invented surface); point cloud ↔ mesh; free orbit; **TSDF + MVS** fallback. **Manual anchor / remove-anchor buttons removed; event anchors are automatic.**
 - **Export:** OBJ / PLY, ASCII PLY, colours + normals; session log; OBJ/PLY files; session-scoped map; stable persistent mapping + reload not yet.
 - **Diagnostics:** measured FPS, frame time, worker `processMs`, event `ev_ms`, `motion_ms`, depth source, valid-depth %, triangles/vertices/keyframes/blocks, SLAM state, relocalisation, memory; session log; native perception self-test; mesh self-test. **No invented numbers.**
 - **Not claimed / not implemented:** physical event camera; event rate beyond camera FPS; absolute-scale guarantee; guaranteed metric accuracy on MVS; **semantic labels with an untrained model**; object detection without a model ("model yok"); **Gaussian Splatting**; reconstruction of moving people/vehicles; unseen geometry; ARCore-not-provided data.
@@ -84,7 +84,9 @@ $env:JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"
 APK: `app\build\outputs\apk\debug\app-debug.apk` / `dist\NeuroVision-latest.apk`.  
 Logs/exports: `Android/data/com.neurovision.app/files/`. 
 
-**Native verification:** `perception_selftest=pass checks=6/6` (event static/motion/threshold + motion right/left/static); `assembleDebug` **BUILD SUCCESSFUL**. Emulator install/launch has no crash, Tango 3DR loads, **ARCore not functional on x86_64 emulator**; use a real device. **Work in progress; no stable release.**
+**Native verification:** `perception_selftest=pass checks=6/6` (event static/motion/threshold + motion right/left/static); `assembleDebug` **BUILD SUCCESSFUL**. 
+
+**Performance / clutter:** no numeric clutter on screen; triangle/vertex/keyframe/block, event/motion `STATIC 0.0 px/s`, etc. are **logged only**; manual anchor + anchor-removal buttons removed; sparse LK every 3rd frame; event cloud capped; 1s UI snapshots; lighter event/depth rendering. Emulator install/launch has no crash, Tango 3DR loads, **ARCore not functional on x86_64 emulator**; use a real device. **Work in progress; no stable release.**
 
 ---
 

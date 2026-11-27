@@ -57,6 +57,10 @@ public:
     // volume and published as their own short-lived mesh, so they are visible
     // without smearing the room around them.
     std::shared_ptr<const MeshData> dynamicMesh() const;
+    // Measured event cloud: event-active pixels with valid measured depth,
+    // unprojected into ARCore world space. No image needed; points only.
+    // (Approximate event->depth alignment; not a semantic or metric invention.)
+    std::shared_ptr<const MeshData> eventCloudMesh() const;
     // Re-meshes every block on the worker thread first, so the file reflects
     // all observations in one state rather than the incremental edit history.
     bool exportMesh(const std::string& path, const std::string& format);
@@ -144,6 +148,7 @@ private:
     // Builds the transient mesh for the pixels masked as moving.
     void buildDynamicMesh(const FrameInput& frame, const DepthResult& depth,
                           const std::vector<uint8_t>& mask);
+    void buildEventCloud(const FrameInput& frame);
     void buildKeyframe(const FrameInput& frame, Keyframe& kf) const;
     void queueDirty(const std::vector<VoxelBlock*>& blocks);
     // Re-triangulates every queued block in one go and publishes the snapshot.
@@ -339,6 +344,12 @@ private:
     // Stage-1/2 perception primitives. Both work on the camera luma only.
     nv::EventEngine events_;
     nv::MotionEngine motion_;
+    uint32_t perceptionFrame_ = 0;
+
+    // Measured event cloud snapshot (rendered as points, not a mesh).
+    mutable std::mutex eventCloudMutex_;
+    std::shared_ptr<MeshData> eventCloudSnapshot_ = std::make_shared<MeshData>();
+    uint32_t eventCloudVersion_ = 1;
 
     std::mutex diagMutex_;
     std::deque<std::string> diagLines_;

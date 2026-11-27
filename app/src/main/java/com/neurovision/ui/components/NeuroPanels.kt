@@ -146,17 +146,7 @@ fun EventPanel(
             }
         }
 
-        Spacer(Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            StatChip("Hız", "${neuro.eventRate.toInt()} ev/s", CyanAccent, Modifier.weight(1f))
-            StatChip("Yoğunluk", pct(neuro.eventDensity), AmberAccent, Modifier.weight(1f))
-            StatChip("Pozitif", "${neuro.posCount}", CyanAccent, Modifier.weight(1f))
-            StatChip("Negatif", "${neuro.negCount}", Color(0xFFFF4696), Modifier.weight(1f))
-        }
+        // Event counters are not shown; they are written to the session log.
 
         Spacer(Modifier.height(8.dp))
 
@@ -286,17 +276,7 @@ fun DepthPanel(metrics: ReconMetrics, modifier: Modifier = Modifier) {
             }
         }
 
-        Spacer(Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            StatChip("Geçerli", pct(metrics.depthValidShare), CyanAccent, Modifier.weight(1f))
-            StatChip("Kaynak", metrics.depthSourceLabel.substringBefore(" "), EmeraldSuccess, Modifier.weight(1f))
-            StatChip("Anahtar kare", "${metrics.keyframes}", AmberAccent, Modifier.weight(1f))
-            StatChip("Gecikme", "${metrics.processMs.toInt()} ms", TextSecondary, Modifier.weight(1f))
-        }
+        // Depth statistics are not shown; they are written to the session log.
 
         Spacer(Modifier.height(10.dp))
 
@@ -442,37 +422,20 @@ fun WorldOverlay(
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        // Geometry counts are not shown; they are written to the session log.
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            StatChip("Üçgen", "${metrics.triangles}", CyanAccent, Modifier.weight(1f))
-            StatChip("Köşe", "${metrics.vertices}", CyanAccent, Modifier.weight(1f))
-            StatChip("Blok", "${metrics.blocks}", AmberAccent, Modifier.weight(1f))
-            StatChip("Anahtar kare", "${metrics.keyframes}", AmberAccent, Modifier.weight(1f))
-        }
     }
 }
 
 /** Technical diagnostics: every row is a measured counter, not a guess. */
 @Composable
 fun DiagnosticsPanel(metrics: ReconMetrics, modifier: Modifier = Modifier) {
-    val neuro = metrics.neuro
-    val runtime = Runtime.getRuntime()
-    val usedMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
-    val maxMb = runtime.maxMemory() / (1024 * 1024)
-
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(DarkBackground)
             .statusBarsPadding()
             .padding(horizontal = 14.dp, vertical = 8.dp)
-            .verticalScroll(rememberScrollState())
     ) {
         Text(
             text = "DIAGNOSTICS",
@@ -481,46 +444,11 @@ fun DiagnosticsPanel(metrics: ReconMetrics, modifier: Modifier = Modifier) {
             fontWeight = FontWeight.Bold
         )
         Text(
-            text = "Tüm değerler canlı ölçüm; sütunlar saniyede iki kez yenilenir.",
+            text = "Tüm ölçümler oturum loguna (scan_*.txt) yazılır; ekranda sayı gösterilmez.",
             color = TextSecondary,
             fontSize = 11.sp
         )
         Spacer(Modifier.height(10.dp))
-
-        DiagSection("Kamera / İzleme")
-        DiagRow("Kamera FPS", f1(metrics.fps))
-        DiagRow("İşleme", "${f1(metrics.processMs)} ms")
-        DiagRow("Takip", if (metrics.tracking) "İZLENİYOR" else "KAYIP",
-            if (metrics.tracking) EmeraldSuccess else RoseError)
-        DiagRow("Tarama", if (metrics.scanning) "AÇIK" else "DURAK")
-        DiagRow("Aşama", phaseName(metrics.phase))
-        DiagRow("İşlenen kare", "${metrics.framesProcessed}")
-
-        DiagSection("Event Engine")
-        DiagRow("Event hızı", "${neuro.eventRate.toInt()} ev/s")
-        DiagRow("Yoğunluk", pct(neuro.eventDensity))
-        DiagRow("Pozitif / negatif", "${neuro.posCount} / ${neuro.negCount}")
-        DiagRow("Ortalama |ΔL|", f2(neuro.meanMagnitude))
-        DiagRow("Eşik C", f2(neuro.eventThreshold))
-        DiagRow("Süre", "${f1(neuro.eventProcessMs)} ms")
-
-        DiagSection("Motion Engine")
-        DiagRow("Yön", neuro.directionLabel)
-        DiagRow("Akış (dx, dy)", "${f2(neuro.flowDx)}, ${f2(neuro.flowDy)} px")
-        DiagRow("Görüntü hızı", "${f1(neuro.flowSpeedPxPerS)} px/s")
-        DiagRow("Özellik", "${neuro.featureCount} (${pct(neuro.trackedShare)})")
-        DiagRow("Sahne değişimi", pct(neuro.sceneChange))
-        DiagRow("Süre", "${f1(neuro.motionProcessMs)} ms")
-
-        DiagSection("Derinlik / Harita")
-        DiagRow("Derinlik kaynağı", metrics.depthSourceLabel)
-        DiagRow("Geçerli derinlik", pct(metrics.depthValidShare))
-        DiagRow("Üçgen / köşe", "${metrics.triangles} / ${metrics.vertices}")
-        DiagRow("Voxel blok", "${metrics.blocks}")
-        DiagRow("Anahtar kare", "${metrics.keyframes}")
-        DiagRow("Bellek", "$usedMb / $maxMb MB")
-
-        DiagSection("Dürüstlük Notu")
         Text(
             text = "Event'ler yazılımsaldır ve kamera FPS'ini aşamaz. " +
                 "Derinlik ARCore Depth API veya cihaz içi MVS'ten gelir; " +
@@ -529,11 +457,11 @@ fun DiagnosticsPanel(metrics: ReconMetrics, modifier: Modifier = Modifier) {
             color = TextSecondary,
             fontSize = 10.sp
         )
-        Spacer(Modifier.height(16.dp))
     }
 }
 
 @Composable
+
 private fun LegendDot(color: Color, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
