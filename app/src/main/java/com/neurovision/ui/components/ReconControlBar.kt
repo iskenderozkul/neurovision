@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -52,6 +53,7 @@ fun ReconControlBar(
     onToggleScan: () -> Unit,
     onOpenExport: () -> Unit,
     onResetScan: () -> Unit,
+    onShareLog: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -135,6 +137,14 @@ fun ReconControlBar(
                     tint = CyanAccent,
                     onClick = onOpenExport,
                     tag = "export_mesh_button"
+                )
+
+                ActionButton(
+                    icon = Icons.Default.Description,
+                    label = "Log",
+                    tint = CyanAccent,
+                    onClick = onShareLog,
+                    tag = "share_log_button"
                 )
             }
         }

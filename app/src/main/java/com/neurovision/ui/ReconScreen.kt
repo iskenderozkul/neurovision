@@ -234,6 +234,10 @@ fun ReconScreen(scanLog: ScanLog) {
             },
             onOpenExport = { showExportSheet = true },
             onResetScan = { surfaceView.resetReconstruction() },
+            onShareLog = {
+                val current = scanLog.currentFile()
+                if (current != null) ScanLog.shareSessionLog(context, current)
+            },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 

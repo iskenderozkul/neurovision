@@ -2258,9 +2258,9 @@ void Engine::buildEventCloud(const FrameInput& frame) {
         const float kcx = frame.Kdepth.cx, kcy = frame.Kdepth.cy;
         const float kfx = frame.Kdepth.fx, kfy = frame.Kdepth.fy;
 
-        std::vector<uint8_t> density(static_cast<size_t>(kEvW) * kEvH, 0);
+        std::vector<int8_t> lastEvents(static_cast<size_t>(kEvW) * kEvH, 0);
         std::vector<uint32_t> argb(static_cast<size_t>(kEvW) * kEvH, 0);
-        events_.densityGrid(density.data());
+        events_.copyEvents(lastEvents.data(), static_cast<int>(lastEvents.size()));
         events_.preview(argb.data());
 
         const Mat3 R = matFromQuat(frame.qx, frame.qy, frame.qz, frame.qw);
@@ -2270,7 +2270,7 @@ void Engine::buildEventCloud(const FrameInput& frame) {
         for (int ey = 0; ey < kEvH && snap->vertices.size() < kMaxPoints; ++ey) {
             for (int ex = 0; ex < kEvW && snap->vertices.size() < kMaxPoints; ++ex) {
                 const size_t idx = static_cast<size_t>(ey) * kEvW + ex;
-                if (density[idx] == 0) continue;
+                if (lastEvents[idx] == 0) continue;
 
                 const float nx = (ex + 0.5f) / kEvW;
                 const float ny = (ey + 0.5f) / kEvH;

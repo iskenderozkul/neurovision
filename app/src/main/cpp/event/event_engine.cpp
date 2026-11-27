@@ -35,7 +35,8 @@ EventEngine::EventEngine()
     : luma_(kPixels, 0),
       ref_(kPixels, 0.f),
       posAcc_(kPixels, 0.f),
-      negAcc_(kPixels, 0.f) {
+      negAcc_(kPixels, 0.f),
+      lastEvents_(kPixels, 0) {
     for (int v = 0; v < 256; ++v) {
         logLut_[v] = std::log(1.f + static_cast<float>(v));
     }
@@ -103,6 +104,7 @@ int EventEngine::process(const uint8_t* gray, int width, int height,
     int posCount = 0;
     int negCount = 0;
     double magSum = 0.0;
+    std::fill(lastEvents_.begin(), lastEvents_.end(), static_cast<int8_t>(0));
     for (int i = 0; i < kPixels; ++i) {
         // Each pixel is visited once: decay and accumulate commute across
         // pixels, so folding both into this pass is identical to decaying the
@@ -121,11 +123,13 @@ int EventEngine::process(const uint8_t* gray, int width, int height,
                 pAcc += 1.f;
                 ++posCount;
                 magSum += static_cast<double>(d);
+                lastEvents_[i] = 1;
             } else if (d <= -c) {   // negative threshold crossing
                 ref_[i] = logVal;
                 nAcc += 1.f;
                 ++negCount;
                 magSum += static_cast<double>(-d);
+                lastEvents_[i] = -1;
             }
         }
         posAcc_[i] = pAcc > kAccCap ? kAccCap : pAcc;
@@ -184,6 +188,7 @@ void EventEngine::reset() {
     std::fill(ref_.begin(), ref_.end(), 0.f);
     std::fill(posAcc_.begin(), posAcc_.end(), 0.f);
     std::fill(negAcc_.begin(), negAcc_.end(), 0.f);
+    std::fill(lastEvents_.begin(), lastEvents_.end(), static_cast<int8_t>(0));
     initialized_ = false;
     hasRate_ = false;
     stats_ = EventStats{};
@@ -228,6 +233,14 @@ void EventEngine::densityGrid(uint8_t* out) const {
         if (!std::isfinite(activity)) activity = 0.f;
         out[i] = static_cast<uint8_t>(activity * 255.f + 0.5f);
     }
+}
+
+void EventEngine::copyEvents(int8_t* out, int maxEvents) const {
+    if (!out || maxEvents <= 0) return;
+    std::lock_guard<std::mutex> lock(mutex_);
+    const int n = kPixels < maxEvents ? kPixels : maxEvents;
+    for (int i = 0; i < n; ++i) out[i] = lastEvents_[i];
+    for (int i = n; i < maxEvents; ++i) out[i] = 0;
 }
 
 EventStats EventEngine::stats() const {

@@ -46,6 +46,9 @@ public:
     void preview(uint32_t* argbOut) const;
     // Normalised event density 0..255, kWidth * kHeight.
     void densityGrid(uint8_t* out) const;
+    // Current-frame events per pixel: +1 positive, -1 negative, 0 no event.
+    // kWidth * kHeight. (Contour/edge selection for the event cloud.)
+    void copyEvents(int8_t* out, int maxEvents) const;
 
     EventStats stats() const;
 
@@ -58,6 +61,7 @@ private:
     std::vector<float> ref_;       // per-pixel reference log intensity
     std::vector<float> posAcc_;    // decaying positive-event accumulation
     std::vector<float> negAcc_;    // decaying negative-event accumulation
+    std::vector<int8_t> lastEvents_; // current-frame +1/-1/0 per pixel
     float logLut_[256] = {};       // logf(1 + v), immutable after construction
     float decay_ = 0.86f;          // preview accumulator persistence
     bool initialized_ = false;     // first frame after reset only seeds ref_

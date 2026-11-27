@@ -86,7 +86,7 @@ Logs/exports: `Android/data/com.neurovision.app/files/`.
 
 **Native verification:** `perception_selftest=pass checks=6/6` (event static/motion/threshold + motion right/left/static); `assembleDebug` **BUILD SUCCESSFUL**. 
 
-**Performance / clutter:** no numeric clutter on screen; triangle/vertex/keyframe/block, event/motion `STATIC 0.0 px/s`, etc. are **logged only**; manual anchor + anchor-removal buttons removed; sparse LK every 3rd frame; event cloud capped; 1s UI snapshots; lighter event/depth rendering. Emulator install/launch has no crash, Tango 3DR loads, **ARCore not functional on x86_64 emulator**; use a real device. **Work in progress; no stable release.**
+**Performance / clutter:** no numeric clutter on screen; triangle/vertex/keyframe/block, event/motion `STATIC 0.0 px/s`, etc. are **logged only**; manual anchor + anchor-removal buttons removed; **`LOG` re-added** (`scanLog.currentFile` + `ScanLog.shareSessionLog`, session `scan_*.txt` retained for API); sparse LK every 3rd frame; event cloud cap; 1s UI snapshots; lighter event/depth rendering. Emulator install/launch has no crash, Tango 3DR loads, **ARCore not functional on x86_64 emulator**; use a real device. **Work in progress; no stable release.**
 
 ---
 
